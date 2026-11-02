@@ -269,7 +269,7 @@ let editOffer = PluginManifest.Offer(
     ])
 
 public let editXPlugin = GaeaPluginDefinition(
-    id: "com.xocialize.gaea.step-audio-editx", version: "0.1.0", minGaea: "0.9.2", team: "CFZS6RXUCP",
+    id: "com.xocialize.gaea.step-audio-editx", version: "0.1.1", minGaea: "0.9.2", team: "CFZS6RXUCP",
     repo: "https://github.com/xocialize-code/gaea-plugin-step-audio-editx", title: "Step-Audio-EditX",
     summary: "Step-Audio-EditX: edits a spoken take in its own voice (MES audio.edit_speech): another emotion or speaking style, an added laugh, sigh, breath or hesitation, denoised, or with its silences trimmed.",
     license: "Apache-2.0", executable: "gaea-step-audio-editx-worker",
