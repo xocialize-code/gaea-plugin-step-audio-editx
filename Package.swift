@@ -16,9 +16,12 @@ let package = Package(
     platforms: [.macOS(.v26)], // mlx-engine-swift's MLXToolKit requires macOS 26
     dependencies: [
         kitPath.map { .package(path: $0) }
-            ?? .package(url: "https://github.com/xocialize-code/gaea-plugin-kit.git", from: "0.8.0"),
+            ?? .package(url: "https://github.com/xocialize-code/gaea-plugin-kit.git", from: "0.11.0"),
         .package(url: "https://github.com/xocialize/mlx-step-audio-editx-swift.git", exact: "0.2.1"),
-        .package(url: "https://github.com/xocialize/mlx-engine-swift.git", from: "0.73.1"),
+        .package(url: "https://github.com/xocialize/mlx-engine-swift.git", from: "0.74.1"),
+        // The fleet's mlx-swift fork, as mlx-engine-swift 0.74.1 takes it (the _updateInternal leak fix; Gaea AB-D-0208).
+        // Named at the root so it wins over a dependency's ml-explore URL.
+        .package(url: "https://github.com/xocialize/mlx-swift", from: "0.32.4"),
     ],
     targets: [
         .target(

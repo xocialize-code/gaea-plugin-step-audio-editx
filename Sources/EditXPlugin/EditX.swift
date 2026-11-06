@@ -138,53 +138,33 @@ public func editPlan(edit: JSONValue?, transcript: String?, seed: UInt64) throws
     guard !text.isEmpty else { throw refuse("The transcript has no words.", "transcript") }
     var effective: [String: JSONValue] = ["seed": .int(Int64(seed)), "edit": edit]
     var plan = EditPlan(edit: .denoise, transcript: text, newTranscript: nil, seed: seed, warnings: warnings, effective: effective)
-    switch kind {
-    case "emotion":
-        let label = edit["emotion"]?.stringValue ?? ""
-        guard let upstream = emotionLabels.first(where: { $0.mes == label })?.upstream else {
-            throw refuse("Step-Audio-EditX can't re-deliver as \(label).")
-        }
-        plan.edit = .emotion(upstream)
-    case "style":
-        let label = edit["style"]?.stringValue ?? ""
-        guard let upstream = styleLabels.first(where: { $0.mes == label })?.upstream else {
-            throw refuse("Step-Audio-EditX has no style \(label).")
-        }
-        plan.edit = .style(upstream)
-    case "add_cue":
-        let cue = edit["cue"]?.stringValue ?? ""
+    // The MES edit as the engine's operation (GaeaPluginKit 0.11.0): the labels Step-Audio-EditX names its own way, and
+    // cues added as its paralinguistic tags, inline in the transcript or at its edges.
+    let vocabulary = SpeechEditVocabulary(emotions: Dictionary(uniqueKeysWithValues: emotionLabels.map { ($0.mes, $0.upstream) }),
+                                          styles: Dictionary(uniqueKeysWithValues: styleLabels.map { ($0.mes, $0.upstream) }))
+    let mapped = try SpeechEdits.operation(edit, vocabulary: vocabulary) { cue, placement in
         guard let tag = cueTags.first(where: { $0.mes == cue })?.upstream else {
             throw refuse("Step-Audio-EditX can't add [\(cue)].")
         }
-        if let placed = edit["text"]?.stringValue {
+        switch placement {
+        case .inline(let placed):
             // The new transcript, with the cue where it goes.
             guard segments(placed).contains(.cue(cue)) else {
                 throw refuse("An add_cue edit's text is the transcript with [\(cue)] inline.")
             }
             let (target, more) = modelText(placed, param: "edit")
-            plan.edit = .paralinguistic(targetTranscript: target)
-            plan.newTranscript = placed
-            plan.warnings += more.filter { !plan.warnings.contains($0) }
-        } else {
-            let at = edit["at"]?.stringValue ?? "end"
-            switch at {
-            case "start":
-                plan.edit = .paralinguistic(targetTranscript: tag + text)
-                plan.newTranscript = "[\(cue)] " + said
-            case "end":
-                plan.edit = .paralinguistic(targetTranscript: text + tag)
-                plan.newTranscript = said + " [\(cue)]"
-            default:
-                throw refuse("An add_cue edit's 'at' is start or end.")
-            }
+            return MappedSpeechEdit(operation: .paralinguistic(targetTranscript: target), warnings: more, newTranscript: placed)
+        case .edge(let atEnd):
+            return atEnd
+                ? MappedSpeechEdit(operation: .paralinguistic(targetTranscript: text + tag), newTranscript: said + " [\(cue)]")
+                : MappedSpeechEdit(operation: .paralinguistic(targetTranscript: tag + text), newTranscript: "[\(cue)] " + said)
         }
-    case "denoise":
-        plan.edit = .denoise
-    case "trim_silence":
-        plan.edit = .trimSilence
-    default:
-        throw refuse("Step-Audio-EditX doesn't make \(kind) edits.")
     }
+    // MESKit gates the kinds by the offer's supports.edits; a direct caller's other kinds are refused here.
+    guard editKinds.contains(kind) else { throw refuse("Step-Audio-EditX doesn't make \(kind) edits.") }
+    plan.edit = mapped.operation
+    plan.newTranscript = mapped.newTranscript
+    plan.warnings += mapped.warnings.filter { !plan.warnings.contains($0) }
     effective["x-stepfun.edit"] = .string(upstreamName(plan.edit))
     plan.effective = effective
     return plan
@@ -269,7 +249,7 @@ let editOffer = PluginManifest.Offer(
     ])
 
 public let editXPlugin = GaeaPluginDefinition(
-    id: "com.xocialize.gaea.step-audio-editx", version: "0.1.1", minGaea: "0.9.2", team: "CFZS6RXUCP",
+    id: "com.xocialize.gaea.step-audio-editx", version: "0.1.2", minGaea: "0.9.2", team: "CFZS6RXUCP",
     repo: "https://github.com/xocialize-code/gaea-plugin-step-audio-editx", title: "Step-Audio-EditX",
     summary: "Step-Audio-EditX: edits a spoken take in its own voice (MES audio.edit_speech): another emotion or speaking style, an added laugh, sigh, breath or hesitation, denoised, or with its silences trimmed.",
     license: "Apache-2.0", executable: "gaea-step-audio-editx-worker",
